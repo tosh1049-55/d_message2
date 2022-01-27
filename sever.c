@@ -67,6 +67,7 @@ int output(int sock){
 		write(sock, in, sizeof in);
 		puts("送信しました");
 	}
+
 	exit(0);
 }
 

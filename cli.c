@@ -24,6 +24,7 @@ int main(int argc, char *argv[]){
 	sock = conection(argv[1], argv[2]);
 	puts("接続に成功しました");
 	massege(sock);
+
 	exit(0);
 }
 
@@ -44,8 +45,7 @@ int massege(int sock){
 	}
 	if(pi == 0) input(sock2);
 
-	for(;;){
-	}
+	for(;;);
 	close(sock);
 	
 	return 0;
