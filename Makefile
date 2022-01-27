@@ -6,7 +6,7 @@ clean:
 	rm -i *.out
 
 cli_run:
-	./cli.out
+	./cli.out localhost 100
 
 sever_run:
-	./sever_run
+	sudo ./sever.out 100
