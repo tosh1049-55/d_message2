@@ -51,28 +51,6 @@ int massege(int sock){
 	return 0;
 }
 
-int output(int sock){
-	char in[1024];
-
-	for(;;){
-		fputs("私:", stdout);
-		fgets(in, sizeof in, stdin);
-		write(sock, in, sizeof in);
-		puts("送信しました");
-	}
-	exit(0);
-}
-
-int input(int sock){
-	char in[1024];
-
-	for(;;){
-		read(sock, in, sizeof in);
-		printf("\n相手:%s私:", in);
-	}
-	exit(0);
-}
-
 //finpがfdの読み込み専用のやつ。fintpは書き込み専用のやつ
 int open_fd(int fd, FILE **finp, FILE **fintp){
 	int fd2;
