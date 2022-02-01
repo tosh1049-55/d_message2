@@ -7,6 +7,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 
+int message(int sock);
 void *output(void *arg);
 void *input(void *arg);
 int listen_socket(char *port);
@@ -37,20 +38,7 @@ int main(int argc, char *argv[]){
 			exit(0);
 		}
 
-		puts("チャットを開始します");
-		s = pthread_create(&in_t, NULL, input, &sock);
-		if(s != 0){
-			fprintf(stderr, "pthread_create: err");
-			exit(1);
-		}
-
-		s = pthread_create(&out_p, NULL, output, &sock);
-		if(s != 0){
-			fprintf(stderr, "pthread_create2: err\n");
-			exit(1);
-		}
-
-		pthread_join(in_t, &res);
+		message(sock);
 	}
 	close(sock);
 

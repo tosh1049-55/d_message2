@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <sys/select.h>
 
-int massege(int sock);
+int message(int sock);
 void *output(void *arg);
 void *input(void *arg);
 int open_fd(int fd, FILE **finp, FILE **fintp);
@@ -26,31 +26,9 @@ int main(int argc, char *argv[]){
 	printf("サーバー%sのポート%sに接続します\n", argv[1],argv[2]);
 	sock = conection(argv[1], argv[2]);
 	puts("接続に成功しました");
-	massege(sock);
+	message(sock);
 
 	exit(0);
-}
-
-int massege(int sock){
-	int pi, s;
-	pthread_t in_t, out_t;
-	void *res;
-	
-	s = pthread_create(&in_t, NULL, input, &sock);
-	if(s != 0){
-		fputs("pthread_create1: err\n", stderr);
-		exit(1);
-	}
-	s = pthread_create(&out_t, NULL, output, &sock);
-	if(s != 0){
-		fputs("pthread_create: err\n", stderr);
-		exit(1);
-	}
-
-	pthread_join(in_t, &res);
-	close(sock);
-	
-	return 0;
 }
 
 //finpがfdの読み込み専用のやつ。fintpは書き込み専用のやつ

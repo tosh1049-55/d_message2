@@ -9,7 +9,35 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <poll.h>
+#include <ncurses.h>
+#include <pthread.h>
 
+void *input(void *arg);
+void *output(void *arg);
+
+int message(int sock){
+	pthread_t in_t, out_t;
+	void *res;
+	int s;
+
+	puts("チャットを開始します");
+        s = pthread_create(&in_t, NULL, input, &sock);
+        if(s != 0){
+		fprintf(stderr, "pthread_create: err");
+                exit(1);
+        }
+ 
+        s = pthread_create(&out_t, NULL, output, &sock);
+        if(s != 0){
+              	fprintf(stderr, "pthread_create2: err\n");
+               	exit(1);
+      	}
+ 
+     	pthread_join(in_t, &res);
+	close(sock);
+
+	return 0;
+}
 
 void *output(void *arg){
 	int sock = *(int *)(arg);
@@ -39,13 +67,12 @@ void *input(void *arg){
 			exit(1);
 		}
 		if(fds[0].revents & POLLRDHUP){
-			puts("ぴあソケットがクローズされました");
+			puts("ピアソケットがクローズされました");
 			exit(1);
 		}
 
 		read(sock, in, sizeof in);
-		printf("\n相手:%s", in);
-		fputs("私:", stdout);
+		printf("\n相手:%s私:", in);
 	}
 	exit(0);
 }
