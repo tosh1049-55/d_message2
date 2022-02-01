@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,11 +7,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <sys/types.h>
-#include <poll.h>
-#include <sys/select.h>
 #include <sys/time.h>
+#include <poll.h>
 
-int output(int sock){
+
+void *output(void *arg){
+	int sock = *(int *)(arg);
 	char in[1024];
 	
 	for(;;){
@@ -22,32 +25,26 @@ int output(int sock){
 	exit(0);
 }
 
-int input(int sock){
+void *input(void *arg){
+	int sock = *(int *)arg, nfds;
 	char in[1024];
-
-	int nfds, ready;
- 	fd_set readfds;
-	struct timeval timeout;
-
-	//selectする
-	FD_ZERO(&readfds);
-	FD_SET(sock, &readfds);
-
-	timeout.tv_sec = 10;
-	timeout.tv_usec = 0;
-	nfds = 1;
-
-	puts("sockのチェック中です");
- 	ready = select(nfds, &readfds, NULL, NULL, &timeout);
-	if(ready == -1){
-		fputs("select err\n", stderr);
-		exit(1);
-	}else if(ready == 0)
-		fputs("timeout\n", stderr);
+	struct pollfd fds[1];
 
 	for(;;){
+		fds[0].fd = sock;
+		fds[0].events = POLLRDHUP;
+		nfds = poll(fds, 1, 0);
+		if(nfds == -1){
+			fputs("poll: err\n", stderr);
+			exit(1);
+		}
+		if(fds[0].revents & POLLRDHUP){
+			puts("ぴあソケットがクローズされました");
+			exit(1);
+		}
+
 		read(sock, in, sizeof in);
-		fputs("\n相手:%s", in);
+		printf("\n相手:%s", in);
 		fputs("私:", stdout);
 	}
 	exit(0);

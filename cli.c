@@ -5,10 +5,13 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <pthread.h>
+#include <sys/time.h>
+#include <sys/select.h>
 
 int massege(int sock);
-int output(int sock);
-int input(int sock);
+void *output(void *arg);
+void *input(void *arg);
 int open_fd(int fd, FILE **finp, FILE **fintp);
 int conection(char *host, char *service);
 
@@ -29,23 +32,22 @@ int main(int argc, char *argv[]){
 }
 
 int massege(int sock){
-	int pi, sock2;
+	int pi, s;
+	pthread_t in_t, out_t;
+	void *res;
 	
-	sock2 = dup(sock);
-	pi = fork();
-	if(pi < 0){
-		fputs("fork1 err\n", stderr);
+	s = pthread_create(&in_t, NULL, input, &sock);
+	if(s != 0){
+		fputs("pthread_create1: err\n", stderr);
 		exit(1);
 	}
-	if(pi == 0) output(sock);
-	pi = fork();
-	if(pi < 0){
-		fputs("fork2 err\n", stderr);
+	s = pthread_create(&out_t, NULL, output, &sock);
+	if(s != 0){
+		fputs("pthread_create: err\n", stderr);
 		exit(1);
 	}
-	if(pi == 0) input(sock2);
 
-	for(;;);
+	pthread_join(in_t, &res);
 	close(sock);
 	
 	return 0;
