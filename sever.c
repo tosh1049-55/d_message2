@@ -13,7 +13,7 @@ void *input(void *arg);
 int listen_socket(char *port);
 
 int main(int argc, char *argv[]){
-	int server, sock;
+	int i, server, sock;
 	struct sockaddr addr;
 	FILE *fd;
 	socklen_t addr_len;
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]){
 	}
 	printf("ポート%sを使うサーバーを立てます\n",argv[1]);
 	server = listen_socket(argv[1]);
-	for(;;){
+	for(i = 0;i<1;i++){
 		pthread_t in_t, out_p;
 		void *res;
 		int s;
