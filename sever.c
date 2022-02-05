@@ -7,7 +7,7 @@
 #include <sys/types.h>
 #include <pthread.h>
 
-int message(int sock);
+int message(int sock, int who);
 void *output(void *arg);
 void *input(void *arg);
 int listen_socket(char *port);
@@ -38,7 +38,7 @@ int main(int argc, char *argv[]){
 			exit(0);
 		}
 
-		message(sock);
+		message(sock, 0);
 	}
 	close(sock);
 

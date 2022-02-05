@@ -9,7 +9,7 @@
 #include <sys/time.h>
 #include <sys/select.h>
 
-int message(int sock);
+int message(int sock, int who);
 void *output(void *arg);
 void *input(void *arg);
 int open_fd(int fd, FILE **finp, FILE **fintp);
@@ -26,7 +26,7 @@ int main(int argc, char *argv[]){
 	printf("サーバー%sのポート%sに接続します\n", argv[1],argv[2]);
 	sock = conection(argv[1], argv[2]);
 	puts("接続に成功しました");
-	message(sock);
+	message(sock, 1);
 
 	exit(0);
 }
