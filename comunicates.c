@@ -22,13 +22,13 @@ void *output(void *arg);
 int message_put(int *poses, char *name, char *message);
 int put_control_init();
 int put_control_end();
-int put_control_put(char *name, char *str);
+int put_control_put(char *name, char *str, int line_max_num);
 int put_control_up();
-int put_control_down();
+int put_control_down(int line_max_num);
 long count_line(char *str);
 int check_line(char *src);
 void sigint_hand(int sig);
-int line_check(FILE *fd);
+int line_check(FILE *fd, int *char_num, long *line_long);
 
 //送信前メッセージ出力の先頭
 static int pos[2] = {30, 0};
@@ -98,8 +98,10 @@ void *output(void *arg){
 		fputs("私:", stdout);
 		for(i = 0;;i++){
 			in_char = getch();	
-			if(in_char == '.')
+			if(in_char == '.'){
+				in[i] = '.';
 				break;
+			}
 			pthread_mutex_lock(&mtx);
 			if(in_char == '\n'){
 				pos[0]++;pos[1] = 0;
@@ -120,22 +122,20 @@ void *output(void *arg){
 				i--;
 				move(pos[0], pos[1]);
 			}else if(in_char == KEY_DOWN){
-				put_control_down();
+				put_control_down(y);
 				i--;
 				move(pos[0], pos[1]);
 			}else{
 				pos[1]++;
 				in[i] = (char)in_char;
 			}
-			move(0,30);
-			printw("%d", in[i]);
 			move(pos[0], pos[1]);
 			pthread_mutex_unlock(&mtx);
 		}
 		in[i+1] = '\0';
 		write(sock, in, sizeof in);
 
-		put_control_put("you", in);
+		put_control_put("you", in, y);
 
 		for(i = 0;i<100;i++){
 			int r;
@@ -161,6 +161,8 @@ void *input(void *arg){
 	struct pollfd fds[1];
 
 	for(;;){
+		int display_max_size[2];
+
 		fds[0].fd = sock;
 		fds[0].events = POLLRDHUP;
 		nfds = poll(fds, 1, 0);
@@ -175,7 +177,8 @@ void *input(void *arg){
 
 		read(sock, in, sizeof in);
 
-		put_control_put("guest", in);
+		getmaxyx(stdscr, display_max_size[0], display_max_size[1]);
+		put_control_put("guest", in, (display_max_size[0] - MESSAGE_MAX_LINE - 1));
 
 		pthread_mutex_lock(&mtx);
 		move(pos[0],pos[1]);
@@ -187,6 +190,7 @@ void *input(void *arg){
 //失敗したら-1を返す.who == 0でsever who == 1でcli
 int put_control_init(int who){
 	FILE *in_fd, *out_fd;
+	int char_num;
 	
 	initscr();
 	keypad(stdscr, TRUE);
@@ -207,13 +211,13 @@ int put_control_init(int who){
 		return -1;
 	}
 	pthread_mutex_lock(&mtx_control);
+	control_date.file_front = line_check(in_fd, &char_num, control_date.line_long);
 	control_date.in_fd = in_fd;
 	control_date.out_fd = out_fd;
-	fseek(control_date.in_fd, 0, SEEK_SET);
+	fseek(control_date.in_fd, char_num, SEEK_SET);
 	fseek(control_date.out_fd, -1, SEEK_END);
-	control_date.pos_tail = line_check(in_fd);
-	fseek(control_date.in_fd, 0, SEEK_SET);
-	control_date.file_front = 0;
+	control_date.pos_tail = 0;
+	fseek(control_date.in_fd, char_num, SEEK_SET);
 	pthread_mutex_unlock(&mtx_control);
 
 	return 0;
@@ -230,8 +234,8 @@ int put_control_end(){
 
 	endwin();
 
-	unlink("message_cli");
-	unlink("message_sever");
+	//unlink("message_cli");
+	//unlink("message_sever");
 
 	for(i = 0;i<10;i++)
 		printf("%ld\n", control_date.line_long[i]);
@@ -240,7 +244,8 @@ int put_control_end(){
 }
 
 //渡された文字列を端末に出力し、ファイルに保存する
-int put_control_put(char *name, char *str){
+//line_numは主力してもいい行数
+int put_control_put(char *name, char *str, int line_max_num){
 	int pos_tail, line_tail, l, line_num;
 	char buf[4096], *i;
 	pthread_mutex_lock(&mtx_control);
@@ -271,15 +276,20 @@ int put_control_put(char *name, char *str){
 		*i++ == '\0';
 		control_date.line_long[l + line_tail + control_date.file_front] = count_line(p);
 		l++;
-	}	
+	}
 
 	pthread_mutex_unlock(&mtx_control);
+
+	while(pos_tail >= line_max_num){
+		put_control_up();
+		pos_tail--;
+	}
 	
 	return pos_tail;
 }
 
-//渡されたファイルを現在の表示から上へスクロールする
 //上にできなかったら-1を返す
+//line_num : 出力してもいい行数
 int put_control_up(){
 	int i, line_long_num;
 	long seek_num;
@@ -290,14 +300,17 @@ int put_control_up(){
 	line_long_num = control_date.file_front;
 	//移動する行の先頭の文字の絶対アドレスを計算
 	seek_num = ftell(control_date.in_fd) + control_date.line_long[line_long_num];
-	if((line_long_num + control_date.pos_tail) >= MAX_LINE){
+	if((line_long_num + control_date.pos_tail) >= MAX_LINE || control_date.pos_tail <= 2){
 		beep();
+
+		pthread_mutex_unlock(&mtx_control);
 		return -1;
 	}
 	fseek(control_date.in_fd, seek_num, SEEK_SET);
 	move(0,0);
 	for(i=0;i<(control_date.pos_tail+1);i++){
 		fgets(buf, sizeof buf, control_date.in_fd);
+		if(buf == NULL) break;
 		printw("%s", buf);
 	}
 	control_date.file_front++;
@@ -312,9 +325,9 @@ int put_control_up(){
 	return 0;
 }
 
-//渡されたファイルを現在の表示から下へスクロールする
-int put_control_down(){
-	int i, line_long_num;
+//line_num 出力してもいい文字数 
+int put_control_down(int line_max_num){
+	int i, line_long_num, out_line_num;
 	long seek_num;
 	char buf[4096];
 
@@ -324,12 +337,17 @@ int put_control_down(){
 	seek_num = ftell(control_date.in_fd) - control_date.line_long[line_long_num];
 	if(line_long_num  < 0){
 		beep();
+		pthread_mutex_unlock(&mtx_control);
 
 		return -1;
 	}
 	fseek(control_date.in_fd, seek_num, SEEK_SET);
+	if((control_date.pos_tail+1) >= line_max_num)
+		out_line_num = line_max_num;
+	else
+		out_line_num = control_date.pos_tail+1;
 	move(0,0);
-	for(i=0;i < (control_date.pos_tail+1);i++){
+	for(i=0;i < out_line_num;i++){
 		fgets(buf, sizeof buf, control_date.in_fd);
 		printw("%s", buf);
 	}
@@ -367,16 +385,23 @@ int check_line(char *src){
 	return (count + 1);
 }
 
-int line_check(FILE *fd){
+int line_check(FILE *fd, int *char_num, long *line_long){
 	char buf;
-	int line_num = 0;
+	int line_num = 0, lang_num = 0;
+	long line_long_count = 0;
 
 	do{
 		buf = getc(fd);
-		if(buf == '\n')
+		lang_num++;
+		line_long_count++;
+		if(buf == '\n' || buf == EOF || buf == '\0'){
 			line_num++;
+			line_long[line_num] = line_long_count;
+			line_long_count = 0;
+		}
 		if(line_num >= MAX_LINE) break;
-	}while(buf != EOF && buf != '\0');
+	}while(buf != EOF);
 
+	*char_num = lang_num-1;
 	return line_num;
 }
