@@ -1,8 +1,10 @@
 #define _GNU_SOURCE
 #define MESSAGE_MAX_LINE 4
-#define MAX_LINE 1000
+#define MAX_LINE 100000
 #define CLI 1
 #define SERVER 0
+#define COLOR_MESSAGE 1
+#define COLOR_KEY 2
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +25,7 @@ int message_put(int *poses, char *name, char *message);
 int put_control_init();
 int put_control_end();
 int put_control_put(char *name, char *str, int line_max_num);
-int put_control_up();
+int put_control_up(int line_max_num);
 int put_control_down(int line_max_num);
 long count_line(char *str);
 int check_line(char *src);
@@ -94,10 +96,20 @@ void *output(void *arg){
 
 		getmaxyx(stdscr, y, x);
 		y -= (MESSAGE_MAX_LINE + 1);
+		move(y,0);
+
+		for(i = 0;i<200;i++){
+			int r;
+			for(r=y;r<(y + MESSAGE_MAX_LINE + 1);r++)
+				mvaddch(r, i, ' ');
+		}
+		move(y,0);
 
 		fputs("私:", stdout);
 		for(i = 0;;i++){
-			in_char = getch();	
+			do{
+				in_char = getch();
+			}while(in_char == -1);
 			if(in_char == '.'){
 				in[i] = '.';
 				break;
@@ -118,7 +130,7 @@ void *output(void *arg){
 					pos[1]--;
 				}
 			}else if(in_char == KEY_UP){
-				put_control_up();	
+				put_control_up(y);	
 				i--;
 				move(pos[0], pos[1]);
 			}else if(in_char == KEY_DOWN){
@@ -137,16 +149,10 @@ void *output(void *arg){
 
 		put_control_put("you", in, y);
 
-		for(i = 0;i<100;i++){
-			int r;
-			for(r=y;r<(y + MESSAGE_MAX_LINE + 1);r++)
-				mvaddch(r, i, ' ');
-		}
 
 		getmaxyx(stdscr, y, x);
 		y -= (MESSAGE_MAX_LINE + 1);
 		
-		move(y,0);
 		pthread_mutex_lock(&mtx);
 		pos[0] = y;pos[1] = 0;
 		pthread_mutex_unlock(&mtx);
@@ -193,7 +199,14 @@ int put_control_init(int who){
 	int char_num;
 	
 	initscr();
+	start_color();
 	keypad(stdscr, TRUE);
+	nodelay(stdscr, TRUE);
+	halfdelay(5);
+	init_pair(COLOR_MESSAGE, COLOR_BLACK, 27);
+	init_pair(COLOR_KEY, COLOR_BLACK, COLOR_WHITE);
+	bkgd(COLOR_PAIR(COLOR_MESSAGE));
+	attrset(COLOR_PAIR(COLOR_KEY));
 	if(who == 0){
 		out_fd = fopen("message_sever", "a");
 		in_fd = fopen("message_sever", "r");
@@ -249,8 +262,6 @@ int put_control_put(char *name, char *str, int line_max_num){
 	int pos_tail, line_tail, l, line_num;
 	char buf[4096], *i;
 	pthread_mutex_lock(&mtx_control);
-	move(control_date.pos_tail, 0);
-	printw("%s:\n%s\n", name, str);
 	line_num = check_line(str) + 2;
 	line_tail = control_date.pos_tail;
 	pos_tail = (line_tail + line_num);
@@ -263,6 +274,7 @@ int put_control_put(char *name, char *str, int line_max_num){
 	strcat(buf, "\n\n");
 
 	fseek(control_date.out_fd, -1, SEEK_END);
+
 	fputs(buf, control_date.out_fd);
 	i = buf;
 	l = 0;
@@ -279,9 +291,14 @@ int put_control_put(char *name, char *str, int line_max_num){
 	}
 
 	pthread_mutex_unlock(&mtx_control);
-
+	
+	if(pos_tail < line_max_num){
+		move(pos_tail, 0);
+		printw("%s:\n%s\n", name, str);
+	}
+	
 	while(pos_tail >= line_max_num){
-		put_control_up();
+		put_control_up(line_max_num);
 		pos_tail--;
 	}
 	
@@ -290,7 +307,7 @@ int put_control_put(char *name, char *str, int line_max_num){
 
 //上にできなかったら-1を返す
 //line_num : 出力してもいい行数
-int put_control_up(){
+int put_control_up(int line_max_num){
 	int i, line_long_num;
 	long seek_num;
 	char buf[4096];
@@ -308,7 +325,7 @@ int put_control_up(){
 	}
 	fseek(control_date.in_fd, seek_num, SEEK_SET);
 	move(0,0);
-	for(i=0;i<(control_date.pos_tail+1);i++){
+	for(i=0;i<line_max_num;i++){
 		fgets(buf, sizeof buf, control_date.in_fd);
 		if(buf == NULL) break;
 		printw("%s", buf);
@@ -342,7 +359,7 @@ int put_control_down(int line_max_num){
 		return -1;
 	}
 	fseek(control_date.in_fd, seek_num, SEEK_SET);
-	if((control_date.pos_tail+1) >= line_max_num)
+	if((control_date.pos_tail + 1) >= line_max_num)
 		out_line_num = line_max_num;
 	else
 		out_line_num = control_date.pos_tail+1;
